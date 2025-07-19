@@ -1,0 +1,33 @@
+version: '3.8' # It's good practice to explicitly define a recent version for healthcheck
+
+services:
+  web:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy # This is the key change!
+
+  db:
+    image: postgres:15 # Using the exact version you specified
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Shah@0340
+      POSTGRES_DB: fastapi_app
+    ports:
+      - "5432:5432" # Exposing the port is fine for debugging, but not strictly necessary for inter-container communication if the web app uses the service name 'db'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck: # Add this healthcheck block
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_app"] # Checks if Postgres is ready
+      interval: 5s # Check every 5 seconds
+      timeout: 5s # Give each check 5 seconds to respond
+      retries: 5 # Retry 5 times before marking as unhealthy
+      start_period: 30s # Give the DB 30 seconds to start up before starting health checks
+
+volumes:
+  postgres_data:
