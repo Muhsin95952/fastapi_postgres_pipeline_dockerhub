@@ -10,72 +10,63 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # Define services required for the job, like PostgreSQL
     services:
       postgres:
-        image: postgres:15 # Use the exact PostgreSQL image version
+        image: postgres:15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: Shah@0340
           POSTGRES_DB: fastapi_app
         ports:
-          - 5432:5432 # Expose port for potential debugging or direct access (though not strictly needed for inter-service communication)
-        # --- CORRECTED HEALTHCHECK SYNTAX ---
-        healthcheck:
-          test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_app"] # Command to check if DB is ready
-          interval: 5s # Check every 5 seconds
-          timeout: 5s # Timeout for each check
-          retries: 5 # Number of retries before marking as unhealthy
-          start_period: 10s # Give the DB time to start before health checks begin
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
     - name: ✅ Checkout code
-      uses: actions/checkout@v4 # Action to check out your repository code
+      uses: actions/checkout@v4
 
     - name: ✅ Set up Python
-      uses: actions/setup-python@v5 # Action to set up Python environment
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.11 # Specify the Python version
+        python-version: 3.11
 
     - name: ✅ Install dependencies
       run: |
-        python -m pip install --upgrade pip # Upgrade pip
-        pip install -r requirements.txt # Install application dependencies from requirements.txt
-        pip install flake8 pytest # Install linting and testing tools
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 pytest
 
     - name: ✅ Lint with flake8
       run: |
-        flake8 app --max-line-length=100 # Run flake8 linter on the 'app' directory
+        flake8 app --max-line-length=100
 
-    # --- REMOVED: No need for explicit 'sleep' due to corrected healthcheck ---
-    # - name: ✅ Wait for PostgreSQL
-    #   run: sleep 10
+    - name: ✅ Wait for PostgreSQL
+      run: sleep 10
 
     - name: ✅ Run Unit + Integration Tests
       env:
-        # --- CORRECTED DATABASE_URL ---
-        # When using GitHub Actions services, the service name 'postgres' acts as the hostname
-        DATABASE_URL: postgresql://postgres:Shah@0340@postgres:5432/fastapi_app
+        DATABASE_URL: postgresql://postgres:Shah@0340@localhost:5432/fastapi_app
       run: |
-        pytest # Run your pytest tests
+        pytest
 
     - name: ✅ Log in to Docker Hub
-      uses: docker/login-action@v3 # Action to log in to Docker Hub
+      uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKER_USERNAME }} # Use GitHub Secrets for Docker Hub username
-        password: ${{ secrets.DOCKER_PASSWORD }} # Use GitHub Secrets for Docker Hub password
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
     - name: ✅ Build Docker Image
       run: |
-        # Build your Docker image, tagging it with your Docker Hub username and 'latest'
         docker build -t ${{ secrets.DOCKER_USERNAME }}/fastapi-app:latest .
 
     - name: ✅ Push to Docker Hub
       run: |
-        # Push the built Docker image to Docker Hub
         docker push ${{ secrets.DOCKER_USERNAME }}/fastapi-app:latest
 
     - name: ✅ Cleanup Docker Images
       run: |
-        # Force remove all unused Docker images to free up space
         docker image prune -af
